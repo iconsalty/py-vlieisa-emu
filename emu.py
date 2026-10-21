@@ -10,6 +10,8 @@ ext1=[0x9, 0xA, 0xE, 0xD]
 with open("directory of this isa formatted machine code here", "r") as file: # read from directory that have machine codes (compile it using the other one)
     mcode = [int(line, 2) for line in file.read().splitlines() if line]
 
+mar = 0
+
 pc = 0
 registers = [0] * 16
 ram = [0] * 256
@@ -33,7 +35,7 @@ status = { # flags!!!!!!!!!!!!!!!
 
                         #functions (fancy)
 
-# general functions for multiplication and division
+# general functions
 
 def gcalc(a, b, m):
     if m == 0: # sign calculation
@@ -52,6 +54,13 @@ def gcalc(a, b, m):
         else: return a
     if m == 2: # unconditional flip
         return(~a + 1) & 0xff
+    if m == 3: # abs 7 bits
+        if a >= 64:
+            return(~a + 1) & 0x7f
+    if m == 4: # "is this 7 bit number negative"
+        if a >= 64:
+            return 1
+        else: return 0
 
 
 # flag functions down below
@@ -163,6 +172,7 @@ while True:
     arith_r_dest = (instruction >> 4) & 0xF
     immediate = instruction & 0xff
     immreg = (instruction >> 8) & 0xf
+    offset = (instruction >> 4) & 0x7F
 
 
     if code == 0x1:
@@ -412,3 +422,40 @@ while True:
                 registers[arith_r_dest] = modafn
 
                 # gosh its finally done with the math stuff
+
+
+
+    elif code == 0x8: # ldi, wow 1 line only?
+        registers[immreg] = immediate
+
+    elif code == 0x9: # mov, dang this is crazy simple compared to those maths ones
+        if subop == 0:
+            registers[arith_r_dest] = registers[arith_r_src2]
+        elif subop == 1:
+            ma_offset = gcalc(offset, 0, 3)
+            ma_offset_sign = gcalc(offset, 0, 4)
+            if ma_offset_sign == 0:
+                memory_address_register = (registers[arith_r_src2] + ma_offset) & 0xff
+            else:
+                memory_address_register = (registers[arith_r_src2] - ma_offset) & 0xff
+            mar = memory_address_register
+
+    elif code == 0xA:
+        if subop == 0: # ldr
+            mem_offset = gcalc(offset, 0, 3)
+            mem_offset_sign = gcalc(offset, 0, 4)
+            if mem_offset_sign == 0:
+                memory_address = (mar + mem_offset) & 0xff
+            else:
+                memory_address = (mar - mem_offset) & 0xff
+            registers[arith_r_src2] = ram[memory_address]
+
+        elif subop == 1: # str
+            mem_offset = gcalc(offset, 0, 3)
+            mem_offset_sign = gcalc(offset, 0, 4)
+            if mem_offset_sign == 0:
+                memory_address = (mar + mem_offset) & 0xff
+            else:
+                memory_address = (mar - mem_offset) & 0xff
+            ram[memory_address] = registers[arith_r_src2]
+            
