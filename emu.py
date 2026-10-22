@@ -1,4 +1,4 @@
-import time # not used yet just there for the fun
+import time
 
 # m0 = addition; m1 = subtraction; m2 = bitwise; m3,4,5 shifts; m6,7 mul imul; m8 div
 
@@ -12,14 +12,15 @@ with open("directory of this isa formatted machine code here", "r") as file: # r
 
 mar = 0
 
-pc = 0
-registers = [0] * 16
+jmp_cond = 0
+pc = 0 # 10 bit
+registers = [0] * 16 # 8 bit
 ram = [0] * 256
 
-dstack = []
+dstack = [0] * 256
 dsp = 0
 
-cstack = []
+cstack = [0] * 256
 csp = 0
 
 status = { # flags!!!!!!!!!!!!!!!
@@ -30,7 +31,9 @@ status = { # flags!!!!!!!!!!!!!!!
     "s": 0,
     "m": 0,
     "q": 0,
-    "id": 0
+    "id": 0,
+    "nvr": 1,
+    "alw": 1,
 }
 
                         #functions (fancy)
@@ -39,28 +42,64 @@ status = { # flags!!!!!!!!!!!!!!!
 
 def gcalc(a, b, m):
     if m == 0: # sign calculation
-        if a >= 128:
+        if a >= 0x80:
             cS = 1
         else:
             cS = 0
-        if b >= 128:
+        if b >= 0x80:
             pS = 1
         else:
             pS = 0
         return(cS ^ pS)
     if m == 1: # abs
-        if a >= 128:
+        if a >= 0x80:
             return(~a + 1) & 0xff
         else: return a
     if m == 2: # unconditional flip
         return(~a + 1) & 0xff
     if m == 3: # abs 7 bits
-        if a >= 64:
+        if a >= 0x40:
             return(~a + 1) & 0x7f
     if m == 4: # "is this 7 bit number negative"
-        if a >= 64:
+        if a >= 0x40:
             return 1
         else: return 0
+
+
+def condition(flag): # this is the worst piece of fucking code ever
+    if flag == 0:
+        if status["z"] == 1:jmp_cond = 1
+    elif flag == 1:
+        if status["z"] == 0:jmp_cond = 1
+    elif flag == 2:
+        if status["c"] == 1:jmp_cond = 1
+    elif flag == 3:
+        if status["c"] == 0:jmp_cond = 1
+    elif flag == 4:
+        if status["n"] == 1:jmp_cond = 1
+    elif flag == 5:
+        if status["n"] == 0:jmp_cond = 1
+    elif flag == 6:
+        if status["v"] == 1:jmp_cond = 1
+    elif flag == 7:
+        if status["v"] == 0:jmp_cond = 1
+    elif flag == 8:
+        if status["s"] == 1:jmp_cond = 1
+    elif flag == 9:
+        if status["s"] == 0:jmp_cond = 1
+    elif flag == 10:
+        if status["m"] == 1:jmp_cond = 1
+    elif flag == 11:
+        if status["q"] == 1:jmp_cond = 1
+    elif flag == 12:
+        if status["id"] == 1:jmp_cond = 1
+    elif flag == 13:jmp_cond = 0 # nvr
+    elif flag == 14:jmp_cond = 1 # alw
+    else:
+        jmp_cond = 0
+        print("cooler nvr")
+    return jmp_cond
+
 
 
 # flag functions down below
@@ -165,6 +204,8 @@ while True:
     instruction = mcode[pc]
     pc += 1
 
+    jmp_cond = 0
+
     code = (instruction >> 12) & 0xF
 
 
@@ -172,7 +213,8 @@ while True:
     arith_r_dest = (instruction >> 4) & 0xF
     immediate = instruction & 0xff
     immreg = (instruction >> 8) & 0xf
-    offset = (instruction >> 4) & 0x7F
+    offset = (instruction >> 4) & 0x7f
+    full_address = instruction & 0x3ff
 
 
     if code == 0x1:
@@ -459,3 +501,40 @@ while True:
                 memory_address = (mar - mem_offset) & 0xff
             ram[memory_address] = registers[arith_r_src2]
             
+    elif code == 0xB: #rlj
+        cond = immreg
+        allow = condition(cond)
+        absolute_imm = (gcalc(immediate, 0, 1)) & 0xff
+        signed_imm = gcalc(immediate, 0, 0)
+        bankvalue = pc & 0x300
+        if signed_imm == 0:
+            if allow == 1:
+                jmpvalue = ((pc - 1) + absolute_imm) & 0xff
+            else:jmpvalue=pc&0xff
+        else:
+            if allow == 1:
+                jmpvalue = ((pc - 1) - absolute_imm) & 0xff
+            else:jmpvalue=pc&0xff
+        pc = bankvalue | jmpvalue
+
+    elif code == 0xC: #jmp
+        cond = immreg
+        allow = condition(cond)
+        bankvalue = pc & 0x300
+        if allow == 1:
+            jmpvalue = immediate & 0xff
+        else:jmpvalue=pc&0xff
+        pc = bankvalue | jmpvalue
+
+    elif code == 0xD:
+        if subop == 0: #cal
+            cstack[csp] = pc
+            csp = (csp + 1) & 0xff
+            pc = full_address
+        elif subop == 1: #ret
+            csp = (csp - 1) & 0xff
+            pc = cstack[csp]
+
+
+
+    time.sleep(1)
