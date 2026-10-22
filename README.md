@@ -10,6 +10,10 @@ passion project presented by who could it be wow its iconsalty or seomthing i do
 
 # here is the list of instructions it supports currently (not tested)
 
+0x0: nop, hlt, sez, clz, sec, clc, cmc, clf
+
+0x1: psh, pop, sic, sdc, trs, tsr, php, plp, rsp, csp, clr
+
 0x2: add, sub, inc, dec
 
 0x3: cmp, cmn, tst, teq

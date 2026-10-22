@@ -100,6 +100,17 @@ def condition(flag): # this is the worst piece of fucking code ever
         print("cooler nvr")
     return jmp_cond
 
+def flag_packer():
+    return((status["z"] << 7) | (status["c"] << 6) | (status["n"] << 5) | (status["v"] << 4) | (status["s"] << 3) | (status["m"] << 2) | (status["q"] << 1) | status["id"])
+def flag_unpacker(packed1):
+    status["z"] = (packed1 >> 7) & 0x1
+    status["c"] = (packed1 >> 6) & 0x1
+    status["n"] = (packed1 >> 5) & 0x1
+    status["v"] = (packed1 >> 4) & 0x1
+    status["s"] = (packed1 >> 3) & 0x1
+    status["m"] = (packed1 >> 2) & 0x1
+    status["q"] = (packed1 >> 1) & 0x1
+    status["id"] = packed1 & 0x1
 
 
 # flag functions down below
@@ -113,19 +124,21 @@ def overflow(result, a, b, m):
         if a == 0x80 & b == 0xff:
             return 1
         else: return 0
-    elif m in (2,3,4,5):
+    elif m in (2,3,4,5,9):
         return 0
 
 def negative(result, m):
     if m in (0,1,2,3,4,5):
         return((result & 0x80) >> 7)
+    elif m == 9:
+        return 0
 
 def carry(raw, result, a, b, m):
     if m == 0:
         return ((a + b) & 0x100) >> 8
     elif m == 1:
         return (((a + ~b) + 1) & 0x100) >> 8
-    elif m == 2:
+    elif m in [2, 9]:
         return 0
 
     #shifts
@@ -155,11 +168,11 @@ def sign(result, a, b, m):
         ovfR = overflow(result, a, b, m)
         neg = negative(result)
         return (ovfR ^ neg)
-    elif m in (2,3,4,5,6,7,8):
+    elif m in (2,3,4,5,6,7,8,9):
         return 0
 
 def mul(raw, result, m):
-    if m in (0,1,2,3,4,5,8):
+    if m in (0,1,2,3,4,5,8,9):
         return 0
     elif m == 6:
         if (raw >> 8) !=0:
@@ -473,7 +486,7 @@ while True:
     elif code == 0x9: # mov, dang this is crazy simple compared to those maths ones
         if subop == 0:
             registers[arith_r_dest] = registers[arith_r_src2]
-        elif subop == 1:
+        elif subop == 1: # mar
             ma_offset = gcalc(offset, 0, 3)
             ma_offset_sign = gcalc(offset, 0, 4)
             if ma_offset_sign == 0:
@@ -534,6 +547,60 @@ while True:
         elif subop == 1: #ret
             csp = (csp - 1) & 0xff
             pc = cstack[csp]
+
+    elif code == 0x0:
+        if subop == 0:
+            continue
+        elif subop == 1:
+            break
+        elif subop == 2:
+            status["z"] = 1
+        elif subop == 3:
+            status["z"] = 0
+        elif subop == 4:
+            status["c"] = 1
+        elif subop == 5:
+            status["c"] = 0
+        elif subop == 6:
+            status["c"] = status["c"] ^ 1
+        elif subop == 7:
+            update_flag(0, 1, 0, 0, 9)
+
+    elif code == 0x1:
+        if subop == 0:
+            dstack[dsp] = registers[arith_r_src2]
+            dsp = (dsp + 1) & 0xff
+        elif subop == 1:
+            dsp = (dsp - 1) & 0xff
+            registers[arith_r_src2] = dstack[dsp]
+        elif subop == 2:
+            dsp = (dsp + 1) & 0xff
+        elif subop == 3:
+            dsp = (dsp - 1) & 0xff
+        elif subop == 4:
+            dsp = registers[arith_r_src2]
+        elif subop == 5:
+            registers[arith_r_src2] = dsp
+        elif subop == 6:
+            packed_status = flag_packer()
+            dstack[dsp] = packed_status
+            dsp = (dsp + 1) & 0xff
+        elif subop == 7:
+            dsp = (dsp - 1) & 0xff
+            packed_status = dstack[dsp]
+            flag_unpacker(packed_status)
+        elif subop == 8:
+            jmpvalue = registers[arith_r_src2]
+            valabs = gcalc(jmpvalue, 0, 1)
+            signedval = gcalc(jmpvalue, 0, 0)
+            if signedval == 0:
+                dsp = (dsp + valabs) & 0xff
+            else: dsp = (dsp - valabs) & 0xff
+        elif subop == 9:
+            dsp = 0
+        elif subop == 0xA:
+            registers = [0] * 16
+        
 
 
 
