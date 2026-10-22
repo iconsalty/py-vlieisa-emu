@@ -126,13 +126,13 @@ def overflow(result, a, b, m):
         if (a == 0x80) & (b == 0xff):
             return 1
         else: return 0
-    elif m in (2,3,4,5,9):
+    elif m in (2,3,4,5,6,7,9):
         return 0
 
 def negative(result, m):
     if m in (0,1,2,3,4,5):
         return((result & 0x80) >> 7)
-    elif m == 9:
+    elif m in (6,7,8,9):
         return 0
 
 def carry(raw, result, a, b, m):
