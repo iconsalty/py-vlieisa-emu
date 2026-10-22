@@ -180,7 +180,8 @@ for line in lines:
 
     elif code == "int":
         op = opcodes[code]
+        sub = subopcodes[code]
         port = fbvalue(parts[1])
-        mcode.append(op + ("0" * (16 - (len(op) + len(port)))) + port)
+        mcode.append(op + sub + ("0" * (16 - (len(op) + len(sub) + len(port)))) + port)
 
-open("F:/users/phuc/bb/output.txt", "w").write("\n".join(mcode))
+open("same as before", "w").write("\n".join(mcode))

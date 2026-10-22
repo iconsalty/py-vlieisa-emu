@@ -60,6 +60,7 @@ def gcalc(a, b, m):
     if m == 3: # abs 7 bits
         if a >= 0x40:
             return(~a + 1) & 0x7f
+        else: return a
     if m == 4: # "is this 7 bit number negative"
         if a >= 0x40:
             return 1
@@ -67,6 +68,7 @@ def gcalc(a, b, m):
 
 
 def condition(flag): # this is the worst piece of fucking code ever
+    jmp_cond = 0
     if flag == 0:
         if status["z"] == 1:jmp_cond = 1
     elif flag == 1:
@@ -121,7 +123,7 @@ def overflow(result, a, b, m):
     elif m == 1:
         return((((a ^ b) & (a ^ result)) & 0x80) >> 7)
     elif m == 8:
-        if a == 0x80 & b == 0xff:
+        if (a == 0x80) & (b == 0xff):
             return 1
         else: return 0
     elif m in (2,3,4,5,9):
@@ -166,7 +168,7 @@ def zero(result, a, m):
 def sign(result, a, b, m):
     if m in (0,1):
         ovfR = overflow(result, a, b, m)
-        neg = negative(result)
+        neg = negative(result, m)
         return (ovfR ^ neg)
     elif m in (2,3,4,5,6,7,8,9):
         return 0
