@@ -1,3 +1,5 @@
+debug_mode = False # set this to true for debugging!
+
 import time
 
 # m0 = addition; m1 = subtraction; m2 = bitwise; m3,4,5 shifts; m6,7 mul imul; m8 div
@@ -7,7 +9,7 @@ ext3=[0x0, 0x4, 0x5, 0xF]
 ext2=[0x2, 0x3, 0x6, 0x7]
 ext1=[0x9, 0xA, 0xE, 0xD]
 
-with open("directory of this isa formatted machine code here", "r") as file: # read from directory that have machine codes (compile it using the other one)
+with open("file", "r") as file: # read from directory that have machine codes (compile it using the other one)
     mcode = [int(line, 2) for line in file.read().splitlines() if line]
 
 mar = 0
@@ -22,6 +24,9 @@ dsp = 0
 
 cstack = [0] * 256
 csp = 0
+
+inp_io = [0] * 16
+out_io = [0] * 16
 
 status = { # flags!!!!!!!!!!!!!!!
     "z": 0,
@@ -223,6 +228,15 @@ while True:
 
     code = (instruction >> 12) & 0xF
 
+    if debug_mode == True:
+        print("\033[H\033[J", end="")
+        print("program counter:", pc)
+        print("instruction:", hex(instruction))
+        print("registers:", registers)
+        print("status", bin(flag_packer())[2:].zfill(8))
+        print("mem[10]", ram[10], "mem[1]", ram[1])
+        #input()
+
 
     arith_r_src2 = instruction & 0xF
     arith_r_dest = (instruction >> 4) & 0xF
@@ -382,6 +396,8 @@ while True:
             tempshift = valA >> shiftamount
             arithT = tempshift & 0xff
             update_flag(tempshift, shiftamount, arithA, arithB, 4)
+            status["n"] = negative(tempshift, 4)
+            status["z"] = zero(tempshift, arithA, 4)
             registers[arith_r_dest] = arithT
 
         elif subop == 5: #flp
@@ -603,7 +619,11 @@ while True:
         elif subop == 0xA:
             registers = [0] * 16
         
+    elif code == 0xE:
+        if subop == 0:
+            registers[arith_r_src2] = inp_io[arith_r_dest]
+        elif subop == 1:
+            out_io[arith_r_dest] = registers[arith_r_src2]
 
 
-
-    time.sleep(1)
+    time.sleep(0.025) # clock speed

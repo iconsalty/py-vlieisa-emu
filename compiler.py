@@ -90,7 +90,7 @@ labels = {}
 pc = 0
 mcode = []
 
-with open("text file to compile here", "r") as file:
+with open("file", "r") as file:
     lines = file.readlines()
 
 for line in lines:
@@ -184,4 +184,4 @@ for line in lines:
         port = fbvalue(parts[1])
         mcode.append(op + sub + ("0" * (16 - (len(op) + len(sub) + len(port)))) + port)
 
-open("same as before", "w").write("\n".join(mcode))
+open("file", "w").write("\n".join(mcode))

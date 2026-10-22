@@ -8,7 +8,7 @@ passion project presented by who could it be wow its iconsalty or seomthing i do
 
 --------------
 
-# here is the list of instructions it supports currently (not tested)
+# here is the list of instructions it supports currently (mostly tested)
 
 0x0: nop, hlt, sez, clz, sec, clc, cmc, clf
 
@@ -38,8 +38,10 @@ passion project presented by who could it be wow its iconsalty or seomthing i do
 
 0xD: cal, ret
 
+0xE: inp, out
+
 -------------------
 
-# changelog
-- added 0x0 and 0x1
-- bug fixes
+# changelog (version 7)
+- added 0xE (io port); (havent implemented a way to input into inp_io yet)
+- bug fixed on sar flag update
