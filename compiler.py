@@ -90,7 +90,7 @@ labels = {}
 pc = 0
 mcode = []
 
-with open("F:/users/phuc/bb/something.asm", "r") as file:
+with open("file to compile here", "r") as file:
     lines = file.readlines()
 
 for line in lines:
