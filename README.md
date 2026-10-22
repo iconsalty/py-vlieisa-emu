@@ -37,3 +37,9 @@ passion project presented by who could it be wow its iconsalty or seomthing i do
 0xC: jmp
 
 0xD: cal, ret
+
+-------------------
+
+# changelog
+- added 0x0 and 0x1
+- bug fixes
