@@ -27,3 +27,9 @@ passion project presented by who could it be wow its iconsalty or seomthing i do
 0x9: mov, mar
 
 0xA: ldr, str
+
+0xB: rlj
+
+0xC: jmp
+
+0xD: cal, ret
