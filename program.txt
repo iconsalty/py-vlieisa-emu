@@ -1,0 +1,15 @@
+# comment using "#"
+ldi r0, 1
+inc r1
+teq r0, r0 # you can comment here too
+jmp z, .label
+hlt #yay labels! ^^^
+.label:
+ldi r1, 5
+inc r0
+dec r1
+rlj nz, -2 # basic loop
+psh r0
+nop #does nothing
+pop r0
+hlt # stops the program

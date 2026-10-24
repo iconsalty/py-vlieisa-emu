@@ -1,7 +1,37 @@
-debug_mode = False # set this to true for debugging!
+# clock speed here!!!!
+base_clock = 2
+overclock_multiplier = 1 # do not put these too high else a whole toaster gonna appear
 
+clock_interval = 1 / (base_clock * overclock_multiplier)
+
+# most of the "break" in the code are temporary behavior except for example, halt
+
+debug_mode = True # set this to true for debugging!
+fixtimer = 0
+
+# most of the "break" in the code are temporary behavior except for example, halt
+
+import ctypes
+import os
+import pygame as pg
 import time
+pg.init()
 
+myappid = "vlieisa.emu.cpu"
+ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+pg.display.set_caption("py_vlieisa_emu v11")
+icon_path = "icon.png"
+icon = pg.image.load(icon_path)
+pg.display.set_icon(icon)
+
+
+pg.font.init()
+font = pg.font.SysFont("Arial", 24) 
+screen = pg.display.set_mode((1280, 720))
+running = True
 # m0 = addition; m1 = subtraction; m2 = bitwise; m3,4,5 shifts; m6,7 mul imul; m8 div
 
 # subopcode spaces
@@ -9,12 +39,13 @@ ext3=[0x0, 0x4, 0x5, 0xF]
 ext2=[0x2, 0x3, 0x6, 0x7]
 ext1=[0x9, 0xA, 0xE, 0xD]
 
-with open("file", "r") as file: # read from directory that have machine codes (compile it using the other one)
+with open("machine-code.txt", "r") as file: # read from directory that have machine codes (compile it using the other one)
     mcode = [int(line, 2) for line in file.read().splitlines() if line]
 
 mar = 0
 
 jmp_cond = 0
+nextcycle = 1
 pc = 0 # 10 bit
 registers = [0] * 16 # 8 bit
 ram = [0] * 256
@@ -36,10 +67,33 @@ status = { # flags!!!!!!!!!!!!!!!
     "s": 0,
     "m": 0,
     "q": 0,
-    "id": 0,
+    "id": 1,
     "nvr": 1,
     "alw": 1,
 }
+
+r0 = 0; r1 = 0; r2 = 0; r3 = 0; r4 = 0; r5 = 0; r6 = 0; r7 = 0; r8 = 0; r9 = 0; r10 = 0; r11 = 0; r12 = 0; r13 = 0; r14 = 0; r15 = 0
+
+box_color = (0, 0, 0)
+bg_color = (255, 143, 201)
+screen.fill(bg_color)
+pg.display.flip()
+box_rect = pg.Rect(0, 0, 120, 720)
+
+def screenfix():
+    screen.fill(bg_color)
+
+def register_display():
+    screen.fill(box_color, box_rect)
+    for i in range(16):
+        register_string = "r" + str(i) + ": " + str(registers[i])
+        text_surface = font.render(register_string, True, (255, 255, 255))
+        reg_pos_y = 16 + (i * 43)
+        screen.blit(text_surface, (16, reg_pos_y))
+    pg.display.update([box_rect])
+
+
+
 
                         #functions (fancy)
 
@@ -217,413 +271,466 @@ def update_flag(raw, result, a, b, m):
 
 # flag functions up there
 
+while running == True:
+    frame_start = time.perf_counter()
+    for i in range(overclock_multiplier):
+        fixtimer = (fixtimer + 1) & 0xfff
+        if fixtimer == 0xfff:
+            screenfix()
 
-while True:
-    if pc >= len(mcode):
-        break
-    instruction = mcode[pc]
-    pc += 1
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                running = False
 
-    jmp_cond = 0
-
-    code = (instruction >> 12) & 0xF
-
-    if debug_mode == True:
-        print("\033[H\033[J", end="")
-        print("program counter:", pc)
-        print("instruction:", hex(instruction))
-        print("registers:", registers)
-        print("status", bin(flag_packer())[2:].zfill(8))
-        print("mem[10]", ram[10], "mem[1]", ram[1])
-        #input()
-
-
-    arith_r_src2 = instruction & 0xF
-    arith_r_dest = (instruction >> 4) & 0xF
-    immediate = instruction & 0xff
-    immreg = (instruction >> 8) & 0xf
-    offset = (instruction >> 4) & 0x7f
-    full_address = instruction & 0x3ff
-
-
-    if code == 0x1:
-        subop = (instruction >> 8) & 0xF
-        if subop >= 11:
+        if pc >= len(mcode):
             break
-    elif code in ext3:
-        subop = (instruction >> 9) & 0x7
-    elif code in ext2:
-        subop = (instruction >> 10) & 0x3
-    elif code in ext1:
-        subop = (instruction >> 11) & 0x1
+        instruction = mcode[pc]
+        pc += nextcycle
 
-    if code == 0x4:
-        if subop >= 6:
-            break
-    if code == 0x5:
-        if subop >= 7:
-            break
-    if code == 0xF:
-        if subop >= 5:
-            break
+        jmp_cond = 0
 
-    arithA = registers[arith_r_dest]
-    arithB = registers[arith_r_src2]
+        code = (instruction >> 12) & 0xF
+
+        if debug_mode == True:
+            print("\033[H\033[J", end="")
+            print("program counter:", pc)
+            print("instruction:", hex(instruction))
+            print("registers:", registers)
+            print("status", bin(flag_packer())[2:].zfill(8))
+            print("mem[10]", ram[10], "mem[1]", ram[1]) # change these depends on testing
+            #input()
 
 
-    if code == 0x2: # basic arithmetics #yikeys #happycore #fruityaerocore #brightfutures
-        if subop == 0: #add
-            arithR = arithA + arithB
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithA, arithB, 0)
-            registers[arith_r_dest] = arithT # /--kill yo- be nice guys totally nothing happened
-
-        elif subop == 1: #sub
-            arithR = arithA - arithB
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithA, arithB, 1)
-            registers[arith_r_dest] = arithT # die/ live
-
-        elif subop == 2: #inc
-            arithR = arithB + 1
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithB, 1, 0)
-            registers[arith_r_src2] = arithT # ugh #dreamcore
-
-        elif subop == 3: #dec
-            arithR = arithB - 1
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithB, 1, 1)
-            registers[arith_r_src2] = arithT # yikes #a
+        arith_r_src2 = instruction & 0xF
+        arith_r_dest = (instruction >> 4) & 0xF
+        immediate = instruction & 0xff
+        immreg = (instruction >> 8) & 0xf
+        offset = (instruction >> 4) & 0x7f
+        full_address = instruction & 0x3ff
 
 
-    elif code == 0x4: # bitwise operatiosn (dumb)
-        if subop == 0: #ior
-            arithR = arithA | arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 1: #nor
-            arithR = ~(arithA | arithB)
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 2: #xor
-            arithR = arithA ^ arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 3: #xnr
-            arithR = ~(arithA ^ arithB)
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 4: #and
-            arithR = arithA & arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 5: #nad
-            arithR = ~(arithA & arithB)
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2)
-            registers[arith_r_dest] = arithT
-
-    elif code == 0x3: # comparessdjiksajfdksfhjkf (no test and set -20 points)
-        if subop == 0: #cmp
-            arithR = arithA - arithB
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithA, arithB, 1) # its literally just compare #bsfr
-
-        elif subop == 1: #cmn
-            arithR = arithA + arithB
-            arithT = (arithR & 0xff)
-            update_flag(arithR, arithT, arithA, arithB, 0) #@everyone new candidate for the most random instructions
-
-        elif subop == 2: #tst
-            arithR = arithA & arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2) #hey
-
-        elif subop == 3: #teq
-            arithR = arithA ^ arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 2) #cmp but fancier
-
-    elif code == 0x5: # shifting sand land
-        if subop == 0: #lsl
-            tempshift = arithA << (arithB & 0x7)
-            arithT = tempshift & 0xff #nothing to see here
-            update_flag(tempshift, arithT, arithA, arithB, 3)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 1: #lsr
-            shiftamount = arithB & 0x7
-            tempshift = arithA >> shiftamount
-            arithT = tempshift & 0xff
-            update_flag(tempshift, shiftamount, arithA, arithB, 4)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 2: #rol
-            tempshift = arithA << (arithB & 0x7)
-            lowerbyte = tempshift & 0xff
-            upperbyte = (tempshift & 0xff00) >> 8
-            arithT = lowerbyte | upperbyte # i said nothing
-            update_flag(tempshift, arithT, arithA, arithB, 3)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 3: #ror
-            tempshift = (arithA << 8) >> (arithB & 7)
-            lowerbyte = tempshift & 0xff
-            upperbyte = (tempshift & 0xff00) >> 8
-            arithT = lowerbyte | upperbyte
-            update_flag(tempshift, arithT, arithA, arithB, 5)
-            registers[arith_r_dest] = arithT # huh HUH you see? theres nothing
-
-        elif subop == 4: #sar
-            if arithA >= 0x80:
-                shiftsign = 1
-            else: shiftsign = 0
-            if shiftsign == 1: valA = arithA + 0xff00
-            else: valA = arithA
-
-            shiftamount = arithB & 0x7
-            tempshift = valA >> shiftamount
-            arithT = tempshift & 0xff
-            update_flag(tempshift, shiftamount, arithA, arithB, 4)
-            status["n"] = negative(tempshift, 4)
-            status["z"] = zero(tempshift, arithA, 4)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 5: #flp
-            flptmp0 = ((arithB & 0x55) << 1) | ((arithB & 0xaa) >> 1)
-            flptmp1 = ((flptmp0 & 0x33) << 2) | ((flptmp0 & 0xcc) >> 2)
-            flptmp2 = ((flptmp1 & 0x0f) << 4) | ((flptmp1 & 0xf0) >> 4)
-            registers[arith_r_src2] = flptmp2
-
-        elif subop == 6: #pct
-            pct = arithB
-            pct = pct - ((pct >> 1) & 0x55)
-            pct = (pct & 0x33) + ((pct >> 2) & 0x33)
-            pct = (pct + (pct >> 4)) & 0x0F
-            registers[arith_r_src2] = pct
-
-    elif code == 0x6:
-        if subop == 0: #mul
-            arithR = arithA * arithB
-            arithT = arithR & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 6)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 1: #iml
-            a = gcalc(arithA, 0, 1)
-            b = gcalc(arithB, 0, 1)
-            mulsign = gcalc(arithA, arithB, 0)
-            mulBFN = (a * b) & 0xffff
-            if mulsign == 1: mulAFN = (~mulBFN + 1) & 0xffff
-            else: mulAFN = mulBFN
-            mulP8 = mulAFN & 0xff
-            update_flag(mulsign, mulAFN, mulP8, 0, 7)
-            registers[arith_r_dest] = mulP8
-
-        elif subop == 2: #muh
-            arithR = arithA * arithB
-            arithT = ((arithR & 0xff00) >> 8) & 0xff
-            update_flag(arithR, arithT, arithA, arithB, 6)
-            registers[arith_r_dest] = arithT
-
-        elif subop == 3: #imh
-            a = gcalc(arithA, 0, 1)
-            b = gcalc(arithB, 0, 1)
-            mulsign = gcalc(arithA, arithB, 0)
-            mulBFN = (a * b) & 0xffff
-            if mulsign == 1: mulAFN = (~mulBFN + 1) & 0xffff
-            else: mulAFN = mulBFN
-            mulP8 = ((mulAFN & 0xff00) >> 8) & 0xff
-            update_flag(mulsign, mulAFN, mulP8, 0, 7)
-            registers[arith_r_dest] = mulP8
-
-    elif code == 0x7: #div related
-        if subop == 0: #div
-            if arithB == 0:
+        if code == 0x1:
+            subop = (instruction >> 8) & 0xF
+            if subop >= 11:
+                print("illegal sub-opcode", subop)
                 break
-            else:
-                arithR = arithA // arithB
-                arithT = arithR & 0xff
-                update_flag(arithR, arithT, arithA, arithB, 8)
-                registers[arith_r_dest] = arithT
+        elif code in ext3:
+            subop = (instruction >> 9) & 0x7
+        elif code in ext2:
+            subop = (instruction >> 10) & 0x3
+        elif code in ext1:
+            subop = (instruction >> 11) & 0x1
 
-        elif subop == 1: #idv
-            a = gcalc(arithA, 0, 1)
-            b = gcalc(arithB, 0, 1)
-            if b == 0:
+        if code == 0x4:
+            if subop >= 6:
+                print("illegal sub-opcode", subop)
                 break
-            else:
-                divsign = gcalc(arithA, arithB, 0)
-                divbfn = (a // b) & 0xff
-                if divsign == 1: divafn = gcalc(divbfn, 0, 2)
-                else: divafn = divbfn
-                update_flag(divsign, divafn, arithA, arithB, 8)
-                registers[arith_r_dest] = divafn
+        if code == 0x5:
+            if subop >= 7:
+                print("illegal sub-opcode", subop)
+                break
+        if code == 0xF:
+            if subop >= 5:
+                print("illegal sub-opcode", subop)
+                break
 
-        elif subop == 2: #mod
-            if arithB == 0:
-                break
-            else:
-                arithR = arithA % arithB
+        arithA = registers[arith_r_dest]
+        arithB = registers[arith_r_src2]
+
+
+        if code == 0x2: # basic arithmetics #yikeys #happycore #fruityaerocore #brightfutures
+            if subop == 0: #add
+                arithR = arithA + arithB
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithA, arithB, 0)
+                registers[arith_r_dest] = arithT # /--kill yo- be nice guys totally nothing happened
+                register_display()
+
+            elif subop == 1: #sub
+                arithR = arithA - arithB
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithA, arithB, 1)
+                registers[arith_r_dest] = arithT # die/ live
+                register_display()
+
+            elif subop == 2: #inc
+                arithR = arithB + 1
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithB, 1, 0)
+                registers[arith_r_src2] = arithT # ugh #dreamcore
+                register_display()
+
+            elif subop == 3: #dec
+                arithR = arithB - 1
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithB, 1, 1)
+                registers[arith_r_src2] = arithT # yikes #a
+                register_display()
+
+
+        elif code == 0x4: # bitwise operatiosn (dumb)
+            if subop == 0: #ior
+                arithR = arithA | arithB
                 arithT = arithR & 0xff
                 update_flag(arithR, arithT, arithA, arithB, 2)
                 registers[arith_r_dest] = arithT
+                register_display()
 
-        elif subop == 3: #imd
-            a = gcalc(arithA, 0, 1)
-            b = gcalc(arithB, 0, 1)
-            if b == 0:
-                break
+            elif subop == 1: #nor
+                arithR = ~(arithA | arithB)
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 2: #xor
+                arithR = arithA ^ arithB
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 3: #xnr
+                arithR = ~(arithA ^ arithB)
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 4: #and
+                arithR = arithA & arithB
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 5: #nad
+                arithR = ~(arithA & arithB)
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+        elif code == 0x3: # comparessdjiksajfdksfhjkf (no test and set -20 points)
+            if subop == 0: #cmp
+                arithR = arithA - arithB
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithA, arithB, 1) # its literally just compare #bsfr
+
+            elif subop == 1: #cmn
+                arithR = arithA + arithB
+                arithT = (arithR & 0xff)
+                update_flag(arithR, arithT, arithA, arithB, 0) #@everyone new candidate for the most random instructions
+
+            elif subop == 2: #tst
+                arithR = arithA & arithB
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2) #hey
+
+            elif subop == 3: #teq
+                arithR = arithA ^ arithB
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 2) #cmp but fancier
+
+        elif code == 0x5: # shifting sand land
+            if subop == 0: #lsl
+                tempshift = arithA << (arithB & 0x7)
+                arithT = tempshift & 0xff #nothing to see here
+                update_flag(tempshift, arithT, arithA, arithB, 3)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 1: #lsr
+                shiftamount = arithB & 0x7
+                tempshift = arithA >> shiftamount
+                arithT = tempshift & 0xff
+                update_flag(tempshift, shiftamount, arithA, arithB, 4)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 2: #rol
+                tempshift = arithA << (arithB & 0x7)
+                lowerbyte = tempshift & 0xff
+                upperbyte = (tempshift & 0xff00) >> 8
+                arithT = lowerbyte | upperbyte # i said nothing
+                update_flag(tempshift, arithT, arithA, arithB, 3)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 3: #ror
+                tempshift = (arithA << 8) >> (arithB & 7)
+                lowerbyte = tempshift & 0xff
+                upperbyte = (tempshift & 0xff00) >> 8
+                arithT = lowerbyte | upperbyte
+                update_flag(tempshift, arithT, arithA, arithB, 5)
+                registers[arith_r_dest] = arithT # huh HUH you see? theres nothing
+                register_display()
+
+            elif subop == 4: #sar
+                if arithA >= 0x80:
+                    shiftsign = 1
+                else: shiftsign = 0
+                if shiftsign == 1: valA = arithA + 0xff00
+                else: valA = arithA
+
+                shiftamount = arithB & 0x7
+                tempshift = valA >> shiftamount
+                arithT = tempshift & 0xff
+                update_flag(tempshift, shiftamount, arithA, arithB, 4)
+                status["n"] = negative(tempshift, 4)
+                status["z"] = zero(tempshift, arithA, 4)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 5: #flp
+                flptmp0 = ((arithB & 0x55) << 1) | ((arithB & 0xaa) >> 1)
+                flptmp1 = ((flptmp0 & 0x33) << 2) | ((flptmp0 & 0xcc) >> 2)
+                flptmp2 = ((flptmp1 & 0x0f) << 4) | ((flptmp1 & 0xf0) >> 4)
+                registers[arith_r_src2] = flptmp2
+                register_display()
+
+            elif subop == 6: #pct
+                pct = arithB
+                pct = pct - ((pct >> 1) & 0x55)
+                pct = (pct & 0x33) + ((pct >> 2) & 0x33)
+                pct = (pct + (pct >> 4)) & 0x0F
+                registers[arith_r_src2] = pct
+                register_display()
+
+        elif code == 0x6:
+            if subop == 0: #mul
+                arithR = arithA * arithB
+                arithT = arithR & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 6)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 1: #iml
+                a = gcalc(arithA, 0, 1)
+                b = gcalc(arithB, 0, 1)
+                mulsign = gcalc(arithA, arithB, 0)
+                mulBFN = (a * b) & 0xffff
+                if mulsign == 1: mulAFN = (~mulBFN + 1) & 0xffff
+                else: mulAFN = mulBFN
+                mulP8 = mulAFN & 0xff
+                update_flag(mulsign, mulAFN, mulP8, 0, 7)
+                registers[arith_r_dest] = mulP8
+                register_display()
+
+            elif subop == 2: #muh
+                arithR = arithA * arithB
+                arithT = ((arithR & 0xff00) >> 8) & 0xff
+                update_flag(arithR, arithT, arithA, arithB, 6)
+                registers[arith_r_dest] = arithT
+                register_display()
+
+            elif subop == 3: #imh
+                a = gcalc(arithA, 0, 1)
+                b = gcalc(arithB, 0, 1)
+                mulsign = gcalc(arithA, arithB, 0)
+                mulBFN = (a * b) & 0xffff
+                if mulsign == 1: mulAFN = (~mulBFN + 1) & 0xffff
+                else: mulAFN = mulBFN
+                mulP8 = ((mulAFN & 0xff00) >> 8) & 0xff
+                update_flag(mulsign, mulAFN, mulP8, 0, 7)
+                registers[arith_r_dest] = mulP8
+                register_display()
+
+        elif code == 0x7: #div related
+            if subop == 0: #div
+                if arithB == 0:
+                    running = False
+                else:
+                    arithR = arithA // arithB
+                    arithT = arithR & 0xff
+                    update_flag(arithR, arithT, arithA, arithB, 8)
+                    registers[arith_r_dest] = arithT
+                    register_display()
+
+            elif subop == 1: #idv
+                a = gcalc(arithA, 0, 1)
+                b = gcalc(arithB, 0, 1)
+                if b == 0:
+                    running = False
+                else:
+                    divsign = gcalc(arithA, arithB, 0)
+                    divbfn = (a // b) & 0xff
+                    if divsign == 1: divafn = gcalc(divbfn, 0, 2)
+                    else: divafn = divbfn
+                    update_flag(divsign, divafn, arithA, arithB, 8)
+                    registers[arith_r_dest] = divafn
+                    register_display()
+
+            elif subop == 2: #mod
+                if arithB == 0:
+                    running = False
+                else:
+                    arithR = arithA % arithB
+                    arithT = arithR & 0xff
+                    update_flag(arithR, arithT, arithA, arithB, 2)
+                    registers[arith_r_dest] = arithT
+                    register_display()
+
+            elif subop == 3: #imd
+                a = gcalc(arithA, 0, 1)
+                b = gcalc(arithB, 0, 1)
+                if b == 0:
+                    running = False
+                else:
+                    if arithA >= 0x80: rsign = 1
+                    else: rsign = 0
+                    modbfn = (a % b) & 0xff
+                    if rsign == 1: modafn = gcalc(modbfn, 0, 2)
+                    else: modafn = modbfn
+                    update_flag(0, modafn, 0, 0, 2)
+                    registers[arith_r_dest] = modafn
+                    register_display()
+
+                    # gosh its finally done with the math stuff
+
+
+
+        elif code == 0x8: # ldi, wow 1 line only?
+            registers[immreg] = immediate
+            register_display()
+
+        elif code == 0x9: # mov, dang this is crazy simple compared to those maths ones
+            if subop == 0:
+                registers[arith_r_dest] = registers[arith_r_src2]
+                register_display()
+            elif subop == 1: # mar
+                ma_offset = gcalc(offset, 0, 3)
+                ma_offset_sign = gcalc(offset, 0, 4)
+                if ma_offset_sign == 0:
+                    memory_address_register = (registers[arith_r_src2] + ma_offset) & 0xff
+                else:
+                    memory_address_register = (registers[arith_r_src2] - ma_offset) & 0xff
+                mar = memory_address_register
+
+        elif code == 0xA:
+            if subop == 0: # ldr
+                mem_offset = gcalc(offset, 0, 3)
+                mem_offset_sign = gcalc(offset, 0, 4)
+                if mem_offset_sign == 0:
+                    memory_address = (mar + mem_offset) & 0xff
+                else:
+                    memory_address = (mar - mem_offset) & 0xff
+                registers[arith_r_src2] = ram[memory_address]
+
+            elif subop == 1: # str
+                mem_offset = gcalc(offset, 0, 3)
+                mem_offset_sign = gcalc(offset, 0, 4)
+                if mem_offset_sign == 0:
+                    memory_address = (mar + mem_offset) & 0xff
+                else:
+                    memory_address = (mar - mem_offset) & 0xff
+                ram[memory_address] = registers[arith_r_src2]
+                register_display()
+                
+        elif code == 0xB: #rlj
+            cond = immreg
+            allow = condition(cond)
+            absolute_imm = (gcalc(immediate, 0, 1)) & 0xff
+            signed_imm = gcalc(immediate, 0, 0)
+            bankvalue = pc & 0x300
+            if signed_imm == 0:
+                if allow == 1:
+                    jmpvalue = ((pc - 1) + absolute_imm) & 0xff
+                else:jmpvalue=pc&0xff
             else:
-                if arithA >= 0x80: rsign = 1
-                else: rsign = 0
-                modbfn = (a % b) & 0xff
-                if rsign == 1: modafn = gcalc(modbfn, 0, 2)
-                else: modafn = modbfn
-                update_flag(0, modafn, 0, 0, 2)
-                registers[arith_r_dest] = modafn
+                if allow == 1:
+                    jmpvalue = ((pc - 1) - absolute_imm) & 0xff
+                else:jmpvalue=pc&0xff
+            pc = bankvalue | jmpvalue
 
-                # gosh its finally done with the math stuff
+        elif code == 0xC: #jmp
+            cond = immreg
+            allow = condition(cond)
+            bankvalue = pc & 0x300
+            if allow == 1:
+                jmpvalue = immediate & 0xff
+            else:jmpvalue=pc&0xff
+            pc = bankvalue | jmpvalue
 
+        elif code == 0xD:
+            if subop == 0: #cal
+                cstack[csp] = pc
+                csp = (csp + 1) & 0xff
+                pc = full_address
+            elif subop == 1: #ret
+                csp = (csp - 1) & 0xff
+                pc = cstack[csp]
 
+        elif code == 0x0:
+            if subop == 0:
+                continue
+            elif subop == 1:
+                running = False
+            elif subop == 2:
+                status["z"] = 1
+            elif subop == 3:
+                status["z"] = 0
+            elif subop == 4:
+                status["c"] = 1
+            elif subop == 5:
+                status["c"] = 0
+            elif subop == 6:
+                status["c"] = status["c"] ^ 1
+            elif subop == 7:
+                update_flag(0, 1, 0, 0, 9)
 
-    elif code == 0x8: # ldi, wow 1 line only?
-        registers[immreg] = immediate
-
-    elif code == 0x9: # mov, dang this is crazy simple compared to those maths ones
-        if subop == 0:
-            registers[arith_r_dest] = registers[arith_r_src2]
-        elif subop == 1: # mar
-            ma_offset = gcalc(offset, 0, 3)
-            ma_offset_sign = gcalc(offset, 0, 4)
-            if ma_offset_sign == 0:
-                memory_address_register = (registers[arith_r_src2] + ma_offset) & 0xff
-            else:
-                memory_address_register = (registers[arith_r_src2] - ma_offset) & 0xff
-            mar = memory_address_register
-
-    elif code == 0xA:
-        if subop == 0: # ldr
-            mem_offset = gcalc(offset, 0, 3)
-            mem_offset_sign = gcalc(offset, 0, 4)
-            if mem_offset_sign == 0:
-                memory_address = (mar + mem_offset) & 0xff
-            else:
-                memory_address = (mar - mem_offset) & 0xff
-            registers[arith_r_src2] = ram[memory_address]
-
-        elif subop == 1: # str
-            mem_offset = gcalc(offset, 0, 3)
-            mem_offset_sign = gcalc(offset, 0, 4)
-            if mem_offset_sign == 0:
-                memory_address = (mar + mem_offset) & 0xff
-            else:
-                memory_address = (mar - mem_offset) & 0xff
-            ram[memory_address] = registers[arith_r_src2]
+        elif code == 0x1:
+            if subop == 0:
+                dstack[dsp] = registers[arith_r_src2]
+                dsp = (dsp + 1) & 0xff
+            elif subop == 1:
+                dsp = (dsp - 1) & 0xff
+                registers[arith_r_src2] = dstack[dsp]
+                register_display()
+            elif subop == 2:
+                dsp = (dsp + 1) & 0xff
+            elif subop == 3:
+                dsp = (dsp - 1) & 0xff
+            elif subop == 4:
+                dsp = registers[arith_r_src2]
+            elif subop == 5:
+                registers[arith_r_src2] = dsp
+                register_display()
+            elif subop == 6:
+                packed_status = flag_packer()
+                dstack[dsp] = packed_status
+                dsp = (dsp + 1) & 0xff
+            elif subop == 7:
+                dsp = (dsp - 1) & 0xff
+                packed_status = dstack[dsp]
+                flag_unpacker(packed_status)
+            elif subop == 8:
+                jmpvalue = registers[arith_r_src2]
+                valabs = gcalc(jmpvalue, 0, 1)
+                signedval = gcalc(jmpvalue, 0, 0)
+                if signedval == 0:
+                    dsp = (dsp + valabs) & 0xff
+                else: dsp = (dsp - valabs) & 0xff
+            elif subop == 9:
+                dsp = 0
+            elif subop == 0xA:
+                registers = [0] * 16
             
-    elif code == 0xB: #rlj
-        cond = immreg
-        allow = condition(cond)
-        absolute_imm = (gcalc(immediate, 0, 1)) & 0xff
-        signed_imm = gcalc(immediate, 0, 0)
-        bankvalue = pc & 0x300
-        if signed_imm == 0:
-            if allow == 1:
-                jmpvalue = ((pc - 1) + absolute_imm) & 0xff
-            else:jmpvalue=pc&0xff
-        else:
-            if allow == 1:
-                jmpvalue = ((pc - 1) - absolute_imm) & 0xff
-            else:jmpvalue=pc&0xff
-        pc = bankvalue | jmpvalue
+        elif code == 0xE:
+            if subop == 0:
+                registers[arith_r_src2] = inp_io[arith_r_dest]
+                register_display()
+            elif subop == 1:
+                out_io[arith_r_dest] = registers[arith_r_src2]
 
-    elif code == 0xC: #jmp
-        cond = immreg
-        allow = condition(cond)
-        bankvalue = pc & 0x300
-        if allow == 1:
-            jmpvalue = immediate & 0xff
-        else:jmpvalue=pc&0xff
-        pc = bankvalue | jmpvalue
-
-    elif code == 0xD:
-        if subop == 0: #cal
-            cstack[csp] = pc
-            csp = (csp + 1) & 0xff
-            pc = full_address
-        elif subop == 1: #ret
-            csp = (csp - 1) & 0xff
-            pc = cstack[csp]
-
-    elif code == 0x0:
-        if subop == 0:
-            continue
-        elif subop == 1:
-            break
-        elif subop == 2:
-            status["z"] = 1
-        elif subop == 3:
-            status["z"] = 0
-        elif subop == 4:
-            status["c"] = 1
-        elif subop == 5:
-            status["c"] = 0
-        elif subop == 6:
-            status["c"] = status["c"] ^ 1
-        elif subop == 7:
-            update_flag(0, 1, 0, 0, 9)
-
-    elif code == 0x1:
-        if subop == 0:
-            dstack[dsp] = registers[arith_r_src2]
-            dsp = (dsp + 1) & 0xff
-        elif subop == 1:
-            dsp = (dsp - 1) & 0xff
-            registers[arith_r_src2] = dstack[dsp]
-        elif subop == 2:
-            dsp = (dsp + 1) & 0xff
-        elif subop == 3:
-            dsp = (dsp - 1) & 0xff
-        elif subop == 4:
-            dsp = registers[arith_r_src2]
-        elif subop == 5:
-            registers[arith_r_src2] = dsp
-        elif subop == 6:
-            packed_status = flag_packer()
-            dstack[dsp] = packed_status
-            dsp = (dsp + 1) & 0xff
-        elif subop == 7:
-            dsp = (dsp - 1) & 0xff
-            packed_status = dstack[dsp]
-            flag_unpacker(packed_status)
-        elif subop == 8:
-            jmpvalue = registers[arith_r_src2]
-            valabs = gcalc(jmpvalue, 0, 1)
-            signedval = gcalc(jmpvalue, 0, 0)
-            if signedval == 0:
-                dsp = (dsp + valabs) & 0xff
-            else: dsp = (dsp - valabs) & 0xff
-        elif subop == 9:
-            dsp = 0
-        elif subop == 0xA:
-            registers = [0] * 16
-        
-    elif code == 0xE:
-        if subop == 0:
-            registers[arith_r_src2] = inp_io[arith_r_dest]
-        elif subop == 1:
-            out_io[arith_r_dest] = registers[arith_r_src2]
-
-
-    time.sleep(0.025) # clock speed
+        elif code == 0xF:
+            if subop == 0:
+                status["id"] = 0
+            elif subop == 1:
+                status["id"] = 1
+            elif subop == 4:
+                    nextcycle = 0
+        target_time = frame_start + ((i + 1) * clock_interval)
+        while time.perf_counter() < target_time:
+            pass
+pg.quit()

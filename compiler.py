@@ -1,3 +1,6 @@
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 opcodes = {
     "nop": "0000", "hlt": "0000", "sez": "0000", "clz": "0000", "sec": "0000", "clc": "0000", "cmc": "0000", "clf": "0000",
     "psh": "0001", "pop": "0001", "sic": "0001", "sdc": "0001", "trs": "0001", "tsr": "0001", "php": "0001", "plp": "0001", "rsp": "0001", "csp": "0001", "clr": "0001",
@@ -90,7 +93,7 @@ labels = {}
 pc = 0
 mcode = []
 
-with open("file", "r") as file:
+with open("program.txt", "r") as file:
     lines = file.readlines()
 
 for line in lines:
@@ -184,4 +187,4 @@ for line in lines:
         port = fbvalue(parts[1])
         mcode.append(op + sub + ("0" * (16 - (len(op) + len(sub) + len(port)))) + port)
 
-open("file", "w").write("\n".join(mcode))
+open("machine-code.txt", "w").write("\n".join(mcode))
